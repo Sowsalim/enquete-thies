@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carte Interactive des Mailles</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <style>
+        /* Existing Styles... */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #f4f4f4;
+        }
+        #header {
+            width: 100%;
+            padding: 10px;
+            background: #007bff;
+            color: white;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        #search-container {
+            display: flex;
+            flex-direction: column; /* Stack items vertically */
+            width: 90%;
+            max-width: 400px;
+            background: white;
+            padding: 10px;
+            margin: 10px auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Make input and search icon on the same line */
+        #search-input-group {
+            display: flex;
+            width: 100%; /* Take full width of the container */
+        }
+
+        #mailleInput {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            font-size: 16px;
+            outline: none;
+        }
+        #search-container > button {  /* Styles for the search button */
+            padding: 8px 12px;
+            border: none;
+            background: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button {
+            padding: 8px 12px;
+            border: none;
+            background: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 5px; /* Add some spacing between buttons */
+        }
+        #map {
+            width: 90%;
+            height: 75vh;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        #geolocate-btn {
+            /* Removed positioning, as it will be block-level */
+            padding: 12px;
+            background: #28a745;
+            color: white;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            width: 100%; /* Make buttons full width */
+            margin-top: 5px;
+        }
+
+        #itinerary-btn {
+            /* Removed positioning */
+            padding: 12px;
+            background: #ff5733;
+            color: white;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            width: 100%; /* Make buttons full width */
+            margin-top: 5px;
+        }
+
+        /* New Styles for Alert */
+        #mail-alert {
+            width: 100%;
+            background: #ffc107; /* Yellow background */
+            color: #333;
+            text-align: center;
+            padding: 10px;
+            display: none; /* Hidden by default */
+            position: relative;
+        }
+
+        #mail-alert button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-left: 10px;
+        }
+        
+        /* Style the buttons on the same line */
+        #location-itinerary-buttons {
+          display: flex;
+          justify-content: space-between; /* Distribute space evenly */
+          width: 100%;
+        }
+
+        #location-itinerary-buttons button {
+          width: 48%; /* Adjust as needed, leave some space for margin */
+          margin-top: 5px;
+        }
+        
+        /* Refresh Button Style */
+        #refresh-btn {
+            padding: 8px 12px;
+            border: none;
+            background: #6c757d; /* Grey */
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 10px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="header">Carte Interactive des Mailles d'Enquête</div>
+
+    <!-- Alert Message Area -->
+    <div id="mail-alert">
+        <span id="mail-alert-message"></span>
+        <button onclick="hideMailAlert()">OK</button>
+    </div>
+
+    <div id="search-container">
+        <div id="search-input-group">
+            <input type="text" id="mailleInput" placeholder="Entrer le numéro du carreau (codecarrea)...">
+            <button onclick="rechercherMaille()">🔍</button>
+        </div>
+        
+        <div id = "location-itinerary-buttons">
+          <button id="geolocate-btn" onclick="localiserUtilisateur()">📍 Ma Position</button>
+          <button id="itinerary-btn" onclick="tracerItineraire()">📍 Itinéraire</button>
+        </div>
+        <button id="refresh-btn" onclick="reinitialiserCarte()">🔄 Réinitialiser</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    <script>
+        var map = L.map('map').setView([14.77918, -16.92675], 15); // Initial position
+
+        // Base map
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Define the user marker
+        var userMarker = null;
+        var userPosition = null;
+        var currentMail = null; // Store current mail the user is in
+        var alertTimeout = null;  // Store the timeout ID
+        var routingControl = null; // Store the routing control instance
+        var allMailLayers = {};   // Store all mail layers for resetting
+
+        // Custom person icon
+        var personIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/128/149/149071.png',
+            iconSize: [40, 40],
+            iconAnchor: [20, 40],
+            popupAnchor: [0, -40]
+        });
+
+        // Sample GeoJSON mail data
+        var geojsonData = {
+            "type": "FeatureCollection",
+            "features": [
+                { "type": "Feature", "properties": { "codecarrea": 1030610 }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ -16.928688740462626, 14.776463047283121 ], [ -16.92776006004393, 14.776470806418468 ], [ -16.927752087958805, 14.775567180647196 ], [ -16.928680764542825, 14.775559422007245 ], [ -16.928688740462626, 14.776463047283121 ] ] ] ] } },
+                { "type": "Feature", "properties": { "codecarrea": 1030613 }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ -16.927752087958805, 14.775567180647196 ], [ -16.926823410832203, 14.775574935555753 ], [ -16.926815443124081, 14.774671309214506 ], [ -16.927744116416257, 14.774663554801103 ], [ -16.927752087958805, 14.775567180647196 ] ] ] ] } }
+            ]
+        };
+
+        var selectedMail = null;
+
+        // Create mail layer
+        var mailleLayer = L.geoJSON(geojsonData, {
+            style: function (feature) {
+                return { color: "#007bff", weight: 2, fillOpacity: 0.4 };
+            },
+            onEachFeature: function (feature, layer) {
+                layer.bindPopup(`<b>Maille ${feature.properties.codecarrea}</b>`);
+                allMailLayers[feature.properties.codecarrea] = layer; // Store layer
+            }
+        }).addTo(map);
+
+        // Function to make the mail blink
+        function makeMailBlink(layer) {
+            var isVisible = true;
+            var blinkCount = 6; // Number of blinks
+
+            function toggleVisibility() {
+                if (blinkCount <= 0) {
+                    layer.setStyle({ color: "#007bff", fillOpacity: 0.4 });
+                    return;
+                }
+
+                isVisible = !isVisible;
+                layer.setStyle({ color: isVisible ? "red" : "#007bff", fillOpacity: isVisible ? 0.8 : 0.4 });
+                blinkCount--;
+
+                setTimeout(toggleVisibility, 500);
+            }
+
+            toggleVisibility();
+        }
+
+        // Search function
+        function rechercherMaille() {
+            var input = document.getElementById("mailleInput").value;
+
+            // Hide all mail layers
+            for (let mail in allMailLayers) {
+                map.removeLayer(allMailLayers[mail]);
+            }
+
+            if (allMailLayers[input]) {
+                // Add only the searched mail layer
+                map.addLayer(allMailLayers[input]);
+                selectedMail = allMailLayers[input]; // Update selectedMail
+                makeMailBlink(allMailLayers[input]);
+                map.fitBounds(allMailLayers[input].getBounds());
+                allMailLayers[input].openPopup();
+            } else {
+                alert("Maille non trouvée !");
+                // Reset the map
+                reinitialiserCarte();
+            }
+        }
+
+        // Function to reset the map
+        function reinitialiserCarte() {
+            // Remove existing routing control if it exists
+            if (routingControl) {
+                map.removeControl(routingControl);
+                routingControl = null;
+            }
+            // Add all mail layers back to the map
+            for (let mail in allMailLayers) {
+                map.addLayer(allMailLayers[mail]);
+            }
+            map.setView([14.77918, -16.92675], 15); // Reset the view
+        }
+
+        // Function to locate user and check if inside a mail
+        function localiserUtilisateur() {
+            if (navigator.geolocation) {
+                // Use watchPosition for continuous updates
+                navigator.geolocation.watchPosition(position => {
+                    var lat = position.coords.latitude;
+                    var lon = position.coords.longitude;
+                    userPosition = L.latLng(lat, lon);
+
+                    if (userMarker) {
+                        userMarker.setLatLng(userPosition); // Update marker position
+                    } else {
+                        userMarker = L.marker(userPosition, { icon: personIcon }).addTo(map)
+                            .bindPopup("Vous êtes ici").openPopup();
+                    }
+
+                    map.setView(userPosition, 17); // Zoom and center the map
+
+                    // Update the routing control if it exists
+                    if (routingControl) {
+                        routingControl.spliceWaypoints(0, 1, userPosition);
+                    }
+                    checkUserInMail(); // Check if the user is inside a mail
+                }, error => {
+                    console.error("Erreur de géolocalisation :", error);
+                }, {
+                    enableHighAccuracy: true,
+                    timeout: 10000, // 10 seconds
+                    maximumAge: 0 // Don't use cached positions
+                });
+            } else {
+                alert("Géolocalisation non supportée !");
+            }
+        }
+
+        // Function to check if user is inside a mail
+        function checkUserInMail() {
+            var insideMail = false;
+            mailleLayer.eachLayer(function (layer) {
+                if (layer.getBounds().contains(userPosition)) {
+                    insideMail = true;
+                    if (currentMail !== layer.feature.properties.codecarrea) {
+                        // New mail entered
+                        if (currentMail) {
+                            alert("Vous êtes sorti de la maille numéro " + currentMail);
+                        }
+                        currentMail = layer.feature.properties.codecarrea;
+                        displayMailAlert(layer.feature.properties.codecarrea);
+                        scheduleRecurringAlert(layer.feature.properties.codecarrea);
+                    }
+                    return; // Exit the loop if inside a mail
+                }
+            });
+
+            if (!insideMail && currentMail) {
+                // User has exited the mail
+                alert("Vous êtes sorti de la maille numéro " + currentMail);
+                clearAlertTimeout();
+                hideMailAlert();
+                currentMail = null;
+            }
+            if (!insideMail) {
+                // User is not in any mail
+                clearAlertTimeout();
+                hideMailAlert();
+                currentMail = null;
+            }
+        }
+
+        // Function to display mail alert
+        function displayMailAlert(mailNumber) {
+            document.getElementById("mail-alert-message").innerText = "Vous êtes dans la maille numéro " + mailNumber;
+            document.getElementById("mail-alert").style.display = "block";
+        }
+
+        // Function to hide mail alert
+        function hideMailAlert() {
+            document.getElementById("mail-alert").style.display = "none";
+            clearAlertTimeout();
+            if (currentMail) {
+                scheduleRecurringAlert(currentMail); // Reschedule
+            }
+        }
+
+        // Function to schedule recurring alert
+        function scheduleRecurringAlert(mailNumber) {
+            clearAlertTimeout();
+            alertTimeout = setTimeout(function () {
+                displayMailAlert(mailNumber);
+            }, 5 * 60 * 1000); // 5 minutes
+        }
+
+        // Function to clear the alert timeout
+        function clearAlertTimeout() {
+            if (alertTimeout) {
+                clearTimeout(alertTimeout);
+                alertTimeout = null;
+            }
+        }
+
+        // Function to calculate and draw route
+        function tracerItineraire() {
+            if (!userPosition || !selectedMail) {
+                alert("Veuillez d'abord localiser votre position et sélectionner une maille !");
+                return;
+            }
+
+            var destination = selectedMail.getBounds().getCenter();
+
+            // Remove existing routing control if it exists
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+
+            routingControl = L.Routing.control({
+                waypoints: [
+                    userPosition,
+                    destination
+                ],
+                routeWhileDragging: false, // Prevent route recalculation while dragging
+                addWaypoints: false, // Prevent adding new waypoints
+                draggableWaypoints: false // Prevent dragging waypoints
+            }).addTo(map);
+
+            // Update the routing control with user position
+            routingControl.on('routesfound', function (e) {
+                var routes = e.routes;
+                var summary = routes[0].summary;
+                console.log('Total distance is ' + summary.totalDistance / 1000 + ' km and total time is ' + Math.round(summary.totalTime / 60) + ' minutes');
+            });
+        }
+
+
+    </script>
+
+
+</body>
+</html>
