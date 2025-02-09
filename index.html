@@ -1345,7 +1345,7 @@ var quartiersData =  {
         // Create mail layer
         var mailleLayer = L.geoJSON(geojsonData, {
             style: function (feature) {
-                return { color: "#007bff", weight: 2, fillOpacity: 0.1 };
+                return { color: "#007bff", weight: 2, fillOpacity: 0.2 };
             },
             onEachFeature: function (feature, layer) {
                 layer.bindPopup(`<b>Maille ${feature.properties.codecarrea}</b>`);
