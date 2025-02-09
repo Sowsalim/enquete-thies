@@ -1414,34 +1414,34 @@ var quartiersData =  {
         }
 
         // Function to locate user and check if inside a mail
-        function localiserUtilisateur() {
+                // Function to locate user and check if inside a mail
+                // Function to locate user and check if inside a mail
+        function localiserUtilisateur(zoomToLocation = false) {
             if (navigator.geolocation) {
-                // Use watchPosition for continuous updates
                 navigator.geolocation.watchPosition(position => {
                     var lat = position.coords.latitude;
                     var lon = position.coords.longitude;
                     userPosition = L.latLng(lat, lon);
 
                     if (userMarker) {
-                        userMarker.setLatLng(userPosition); // Update marker position
+                        userMarker.setLatLng(userPosition);
                     } else {
                         userMarker = L.marker(userPosition, { icon: personIcon }).addTo(map)
                             .bindPopup("Vous êtes ici").openPopup();
                     }
 
-                    map.setView(userPosition, 17); // Zoom and center the map
-
-                    // Update the routing control if it exists
-                    if (routingControl) {
-                        routingControl.spliceWaypoints(0, 1, userPosition);
+                    // Conditionally zoom to the location
+                    if (zoomToLocation) {
+                        map.setView(userPosition, 17); // Zoom level 17
                     }
-                    checkUserInMail(); // Check if the user is inside a mail
+
+                    checkUserInMail();
                 }, error => {
                     console.error("Erreur de géolocalisation :", error);
                 }, {
                     enableHighAccuracy: true,
-                    timeout: 10000, // 10 seconds
-                    maximumAge: 0 // Don't use cached positions
+                    timeout: 10000,
+                    maximumAge: 0
                 });
             } else {
                 alert("Géolocalisation non supportée !");
